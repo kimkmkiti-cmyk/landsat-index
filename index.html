@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Landsat 다중분광지수 분석 플랫폼</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css">
+<link rel="stylesheet" href="css/style.css?v=5">
+</head>
+<body>
+<header class="topbar">
+  <h1>🛰️ Landsat 8/9 다중분광지수 분석 플랫폼</h1>
+  <span class="status" id="status">대기 중 — 1단계에서 Landsat 영상 폴더를 선택하세요.</span>
+</header>
+
+<section class="steps">
+  <!-- 1단계 -->
+  <div class="step" id="step1">
+    <div class="step-head"><span class="num">1</span>내 PC에서 영상 불러오기</div>
+    <label class="btn primary file-btn">
+      📁 폴더 선택
+      <input type="file" id="folderInput" webkitdirectory directory multiple hidden>
+    </label>
+    <select id="sceneSelect" class="hidden"></select>
+    <div class="info" id="sceneInfo">Landsat 8/9 (LC08/LC09) Level-1 또는 Level-2 GeoTIFF 밴드가 들어있는 폴더</div>
+  </div>
+
+  <!-- 2단계 -->
+  <div class="step disabled" id="step2">
+    <div class="step-head"><span class="num">2</span>다중분광지수 선택</div>
+    <div class="index-list" id="indexList"></div>
+  </div>
+
+  <!-- 3단계 -->
+  <div class="step disabled" id="step3">
+    <div class="step-head"><span class="num">3</span>영상 불러오기</div>
+    <div class="row">
+      <label class="small">해상도</label>
+      <select id="resSelect">
+        <option value="1024">빠름 (최대 1024px)</option>
+        <option value="2048" selected>보통 (최대 2048px)</option>
+        <option value="4096">정밀 (최대 4096px)</option>
+        <option value="0">원본 (30m, 메모리 多)</option>
+      </select>
+    </div>
+    <button class="btn primary" id="loadBtn">🗂️ 밴드 영상 불러오기</button>
+    <div class="info" id="bandInfo"></div>
+    <div class="progress hidden" id="progress"><div id="progressBar"></div></div>
+  </div>
+
+  <!-- 4단계 -->
+  <div class="step disabled" id="step4">
+    <div class="step-head"><span class="num">4</span>분석 실행</div>
+    <button class="btn primary" id="runBtn">▶ 분석 실행</button>
+    <div class="info" id="runInfo"></div>
+  </div>
+
+  <!-- 5단계 -->
+  <div class="step disabled" id="step5">
+    <div class="step-head"><span class="num">5</span>결과물 분류하기</div>
+    <div class="row">
+      <select id="dirSelect" title="분류 조건">
+        <option value="ge">지수 ≥ 임계값</option>
+        <option value="le">지수 ≤ 임계값</option>
+      </select>
+      <b id="thVal">-</b>
+    </div>
+    <input type="range" id="thSlider" min="-1" max="1" step="0.01" value="0">
+    <canvas id="histCanvas" width="260" height="46"></canvas>
+    <div class="row">
+      <button class="btn primary" id="confirmBtn">✔ 임계값 확정</button>
+      <label class="small"><input type="checkbox" id="binaryChk"> 분류색 표시</label>
+    </div>
+    <div class="row">
+      <label class="small" for="opacitySlider">투명도</label>
+      <input type="range" id="opacitySlider" min="0" max="100" step="5" value="100" style="flex:1">
+      <span class="small" id="opacityVal">100%</span>
+    </div>
+    <div class="info" id="classInfo"></div>
+  </div>
+
+  <!-- 6단계 -->
+  <div class="step disabled" id="step6">
+    <div class="step-head"><span class="num">6</span>통계분석 결과</div>
+    <div class="row">
+      <button class="btn primary" id="drawBtn">✏️ 폴리곤</button>
+      <button class="btn primary" id="rectBtn">⬜ 사각형</button>
+      <button class="btn" id="clearBtn">🗑 지우기</button>
+    </div>
+    <button class="btn primary" id="adminBtn">🗺 행정구역(시·군) 선택</button>
+    <div class="info">폴리곤: 클릭으로 꼭짓점을 찍고 첫 점을 다시 클릭하면 완료<br>사각형: 오른쪽 결과 화면에서 드래그</div>
+  </div>
+</section>
+
+<main class="viewers">
+  <div class="left">
+    <div class="pane">
+      <div class="pane-title"><span id="titleA">밴드 A</span></div>
+      <div class="map" id="mapA"></div>
+    </div>
+    <div class="pane">
+      <div class="pane-title"><span id="titleB">밴드 B</span></div>
+      <div class="map" id="mapB"></div>
+    </div>
+  </div>
+  <div class="pane right">
+    <div class="pane-title">
+      <span id="titleR">분석 결과</span>
+      <span class="spacer"></span>
+      <label class="small hidden">표시 지수
+        <select id="activeIndex" disabled></select>
+      </label>
+    </div>
+    <div class="map" id="mapR"></div>
+    <div class="admin-panel hidden" id="adminPanel">
+      <div class="admin-head"><span id="adminTitle">📊 행정구역별 분석</span><button class="btn" id="adminClear">선택 해제</button></div>
+      <div class="admin-scroll"><table id="adminTable"></table></div>
+    </div>
+    <div class="legend hidden" id="legend">
+      <div class="legend-title" id="legendTitle"></div>
+      <div class="legend-bar"></div>
+      <div class="legend-labels"><span id="legMin"></span><span id="legMax"></span></div>
+    </div>
+  </div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js"></script>
+<script src="data/sgg.js?v=5"></script>
+<script src="js/indices.js?v=5"></script>
+<script src="js/raster.js?v=5"></script>
+<script src="js/app.js?v=5"></script>
+</body>
+</html>
